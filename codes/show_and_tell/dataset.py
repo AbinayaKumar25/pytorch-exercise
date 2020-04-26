@@ -110,8 +110,10 @@ def collate_fn(data):
     images = torch.stack(images, 0)
     
     # add padding to match max length and numericalize caption
-    captions, lengths = CaptionDataset.TEXT.process(captions, 
-        device=-1, train=True)
+    #captions, lengths = CaptionDataset.TEXT.process(captions, 
+    #    device=-1, train=True)
+
+    captions, lengths = CaptionDataset.TEXT.process(captions)
     
     return images, captions, lengths
 

@@ -1,6 +1,7 @@
 import os
 import argparse
 from solver import Solver
+import time
 
 def main():
     parser = argparse.ArgumentParser()
@@ -21,7 +22,10 @@ def main():
     
     args = parser.parse_args()
     solver = Solver(args)
+    start = time.time()
     solver.fit()
+    end = time.time()
+    print('Time taken: {}', end-start)
 
 if __name__ == "__main__":
     main()
