@@ -4,14 +4,14 @@ import torchvision.models as models
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 
 class Net(nn.Module):
-    def __init__(self, TEXT,
+    def __init__(self, TEXT, model_type,
                  hidden_dim=512, num_layers=2):
         super().__init__()
 
         vocab_size = TEXT.vocab.vectors.size(0)
         embed_dim = TEXT.vocab.vectors.size(1)
         
-        self.encoder = Encoder(embed_dim)
+        self.encoder = Encoder(embed_dim, model_type)
         self.decoder = Decoder(TEXT,
                                vocab_size, embed_dim,
                                hidden_dim, num_layers)
@@ -30,10 +30,13 @@ class Net(nn.Module):
 
 
 class Encoder(nn.Module):
-    def __init__(self, embed_dim):
+    def __init__(self, embed_dim, model_type):
         super().__init__()
 
-        self.body = models.resnet50(pretrained=True)
+        if model_type == "resnet-50":
+            self.body = models.resnet50(pretrained=True)
+        else:
+            self.body = models.resnet18(pretrained=True)
 
         for param in self.body.parameters():
             param.requires_grad_(False)
