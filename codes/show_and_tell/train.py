@@ -3,6 +3,7 @@ import argparse
 from solver import Solver
 import time
 
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--lr", type=float, default=0.001)
