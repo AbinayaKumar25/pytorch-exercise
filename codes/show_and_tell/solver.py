@@ -5,6 +5,7 @@ from net import Net
 from dataset import get_caption_dataset
 from torch.nn.utils.rnn import pack_padded_sequence
 import mlflow
+import numpy as np
 #from visdomX import VisdomX
 
 class Solver():
@@ -22,6 +23,8 @@ class Solver():
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         self.net = Net(TEXT, args.encoder_model, args.hidden_dim, args.num_layers).to(self.device)
+
+        self.net.load_state_dict(torch.load("/home/abinaya/Documents/Show_and_tell_pytorch/codes/show_and_tell/checkpoint_resnet18_3DRNN_1/caption_100.pth"))
         self.loss_fn = torch.nn.CrossEntropyLoss(ignore_index=1) # <pad>: 1 (because pad's index is 1?)
         self.optim   = torch.optim.Adam(
             filter(lambda p: p.requires_grad, self.net.parameters()),
@@ -37,15 +40,21 @@ class Solver():
     def fit(self):
         #with mlflow.set_exp
         args = self.args
-        mlflow.set_experiment(experiment_name="Experiment_" + args.mlflow_experiment_name)
+        mlflow.set_experiment(experiment_name=args.mlflow_experiment_name)
 
-        with mlflow.start_run():
+        with mlflow.start_run(run_name="3 layer LSTM"):
             for epoch in range(args.max_epochs):
                 self.net.train()
-                for step, inputs in enumerate(self.train_loader):
+                val_epoch_loss = 0
+                train_epoch_loss = 0
+                for step, (inputs, test_inputs) in enumerate(zip(self.train_loader, self.test_loader)):
                     image   = inputs[0].to(self.device)
                     caption = inputs[1].to(self.device)
                     lengths = inputs[2].to(self.device)
+
+                    val_image   = test_inputs[0].to(self.device)
+                    val_caption = test_inputs[1].to(self.device)
+                    val_lengths = test_inputs[2].to(self.device)
 
                     out = self.net(image, caption, lengths)
                     loss = self.loss_fn(out, caption.view(-1))
@@ -53,12 +62,22 @@ class Solver():
                     self.optim.zero_grad()
                     loss.backward()
                     self.optim.step()
-                
-                mlflow.log_metric("Cross-entropy loss", loss.item())
+                    train_epoch_loss += loss.item()
+
+                    with torch.no_grad():
+                        val_out = self.net(val_image, val_caption, val_lengths)
+                        val_loss = self.loss_fn(val_out, val_caption.view(-1))
+                        val_epoch_loss += val_loss.item()
+
+                train_epoch_loss = train_epoch_loss / (step+1) 
+                val_epoch_loss = val_epoch_loss / (step+1)
+                mlflow.log_metric("Train loss", train_epoch_loss, step=epoch)
+                mlflow.log_metric("Val loss", val_epoch_loss, step=epoch)
 
                 if (epoch+1) % args.print_every == 0:
-                    perplexity = torch.exp(loss).item()
-                    mlflow.log_metric("Perplexity", perplexity)
+                    perplexity = np.exp(train_epoch_loss)
+                    mlflow.log_metric("Train Perplexity", perplexity)
+                    mlflow.log_metric("Val Perplexity", np.exp(val_epoch_loss))
                     #self.vis.add_scalars(perplexity, epoch,
                     #                     title="Perplexity",
                     #                     ylabel="Perplexity", xlabel="Epoch")
@@ -72,5 +91,5 @@ class Solver():
     def save(self, ckpt_dir, ckpt_name, global_step):
         save_path = os.path.join(
             ckpt_dir, "{}_{}.pth".format(ckpt_name, global_step))
-        mlflow.log_artifact(ckpt_dir)
+        #mlflow.log_artifact(ckpt_dir)
         torch.save(self.net.state_dict(), save_path)
