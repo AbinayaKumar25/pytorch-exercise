@@ -131,6 +131,7 @@ class Decoder_DRNN(nn.Module):
         batch_size = feature.size(0)
       
         hidden = None
+        
         #embed = feature.unsqueeze(1)
         embed = feature
         result = torch.zeros(batch_size, 51, embed.size(1)).cuda()
