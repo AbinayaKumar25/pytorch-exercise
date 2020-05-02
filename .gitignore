@@ -2,6 +2,7 @@
 *.swp
 *.pth
 __pycache__
+mlruns/
 
 .ipynb_checkpoints
 .vector_cache
