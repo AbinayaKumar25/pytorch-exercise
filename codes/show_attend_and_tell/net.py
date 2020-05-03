@@ -12,7 +12,7 @@ class Net(nn.Module):
         vocab_size = TEXT.vocab.vectors.size(0)
         embed_dim = TEXT.vocab.vectors.size(1)
         
-        self.encoder = Encoder(embed_dim)
+        self.encoder = Encoder(embed_dim, hidden_dim=hidden_dim)
         self.decoder = AttentionDecoder(TEXT,
             vocab_size, embed_dim,
             hidden_dim, attn_dim,
@@ -32,14 +32,24 @@ class Net(nn.Module):
 
 
 class Encoder(nn.Module):
-    def __init__(self, embed_dim):
+    def __init__(self, embed_dim, hidden_dim=512, model_type="resnet-18"):
         super().__init__()
         
         # exclude last max_pool to maintain output shape as [512, 14, 14]
-        self.body = models.vgg19_bn(pretrained=True).features[:-1]
+        #self.body = models.vgg19_bn(pretrained=True).features[:-1]
 
+        if model_type == "resnet-50":
+            self.body = models.resnet50(pretrained=True).features[:-1]
+        else:
+            self.body = models.resnet18(pretrained=True)
+            self.body = torch.nn.Sequential(*(list(self.body.children())[:-2])) #removing avg. pool and fc layer
+            #output shape [N, 512, 7, 7]
+        
         for param in self.body.parameters():
             param.requires_grad_(False)
+        
+        # modify last fc layer
+        #self.body.fc = nn.Linear(self.body.fc.in_features, hidden_dim)
 
     def forward(self, x):
         return self.body(x)
@@ -93,8 +103,8 @@ class AttentionDecoder(nn.Module):
             requires_grad=False)
         cx = hx.clone()
         
-        # (N, 512, 14, 14) -> (N, 196, 512)
-        feature = feature.permute(0, 2, 3, 1).view(-1, 196, 512)
+        # [N, 512, 7, 7] -> (N, 49, 512)
+        feature = feature.permute(0, 2, 3, 1).view(feature.shape[0], -1, 512)
         feature_proj = self.proj_feature(feature)
         
         predicts = feature.new_zeros((batch_size, lengths[0], self.vocab_size))
@@ -130,8 +140,8 @@ class AttentionDecoder(nn.Module):
             requires_grad=False)
         cx = hx.clone()
         
-        # (N, 512, 14, 14) -> (N, 196, 512)
-        feature = feature.permute(0, 2, 3, 1).view(-1, 196, 512)
+        # (N, 512, 7, 7) -> (N, 49, 512)
+        feature = feature.permute(0, 2, 3, 1).view(batch_size, -1, 512)
         feature_proj = self.proj_feature(feature)
         
         # initial embed (<start> token)
